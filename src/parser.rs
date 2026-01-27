@@ -22,7 +22,8 @@
     type=PROCTITLE msg=audit(1364481363.243:24287) : proctitle=636174002F6574632F7373682F737368645F636F6E666967
     
     For now, let's just grab all the key=value pairs.
-    */
+*/
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -42,6 +43,18 @@ pub enum ParseError {
     FileNotFound,
     FailedToReadLine,
     InvalidLine(String),
+}
+
+pub fn parse_log_file(filepath: String) -> Result<Vec<Record>, ParseError> {
+    let file = File::open(filepath).map_err(|_| ParseError::FileNotFound)?;
+    let reader = BufReader::new(file);
+    
+    reader
+        .lines()
+        .map(|line_res| line_res.map_err(|_| ParseError::FailedToReadLine)) // handle line read errors
+        .map(|line| read_to_fields(&line?)) // convert each line into a RecordFields
+        .map(|fields| parse_to_record(fields?)) // convert each RecordFields into a Record
+        .collect() // collect is able to convert an iterator of Results into a Result of a collection via the FromIterator trait
 }
 
 fn read_to_fields(line: &str) -> Result<RecordFields, ParseError> {
@@ -70,18 +83,6 @@ fn read_to_fields(line: &str) -> Result<RecordFields, ParseError> {
 fn parse_to_record(record_fields: RecordFields) -> Result<Record, ParseError> {
     Ok(Record { fields: record_fields.fields })
 }
-
-pub fn parse_log_file(filepath: String) -> Result<Vec<Record>, ParseError> {
-    let file = File::open(filepath).map_err(|_| ParseError::FileNotFound)?;
-    let reader = BufReader::new(file);
-    
-    reader
-        .lines()
-        .map(|line| read_to_fields(&line.map_err(|_| ParseError::FailedToReadLine)?)) // convert each line into a RecordFields
-        .map(|fields| parse_to_record(fields?)) // convert each RecordFields into a Record
-        .collect()
-}
-
 
 #[cfg(test)]
 mod tests {
