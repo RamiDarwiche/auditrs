@@ -23,8 +23,6 @@
     
     For now, let's just grab all the key=value pairs.
     */
-    
-    
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -48,6 +46,10 @@ pub enum ParseError {
 
 fn read_to_fields(line: &str) -> Result<RecordFields, ParseError> {
     let mut fields = HashMap::new();
+
+    if line.trim().is_empty() {
+        return Err(ParseError::InvalidLine(line.to_string()));
+    }
     
     for part in line.split_whitespace() {
         if let Some(eq_pos) = part.find('=') {
@@ -80,9 +82,9 @@ pub fn parse_log_file(filepath: String) -> Result<Vec<Record>, ParseError> {
         .collect()
 }
 
+
 #[cfg(test)]
 mod tests {
-    use std::vec;
 
     use super::*;
 
@@ -167,5 +169,26 @@ mod tests {
         ]);
         
         std::fs::remove_file(temp_file_path).unwrap();
+    }
+
+    #[test]
+    fn test_bad_filepath() {
+        let result = parse_log_file("non_existent_file.log".to_string());
+        assert!(matches!(result, Err(ParseError::FileNotFound)));
+    }
+
+    #[test]
+    fn test_invalid_line() {
+        let invalid_line = "type=SYSCALL msg=audit(1364481363.243:24287) arch=c000003e syscall"; // missing '=' in last part
+        let result = read_to_fields(invalid_line);
+        assert!(matches!(result, Err(ParseError::InvalidLine(_))));
+    }
+
+    #[test]
+    fn test_empty_line() {
+        let empty_line = "";
+        let result = read_to_fields(empty_line);
+        assert!(matches!(result, Err(ParseError::InvalidLine(_))));
+
     }
 }
