@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use strum_macros::EnumString;
+
 #[derive(Debug, PartialEq)]
 pub struct Record {
     fields: HashMap<String, String>, // identical to RecordFields for now.
@@ -23,12 +25,38 @@ pub struct RecordFields {
     pub fields: HashMap<String, String>,
 }
 
-// This is a good starting point for typed records. Just read the 'TYPE' field and kaboom.
+/// This is a good starting point for typed records. Just read the 'TYPE' field and kaboom.
+/// Using strum allows us to automatically convert log types like NETFILTER_CFG and SYSCALL
+/// to their enum equivalent by calling RecordType::from_str(<type_string>) on the type that
+/// we wish to translate.
+#[derive(EnumString, PartialEq, Debug)]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum RecordType {
+    NetfilterCfg,
     Syscall,
-    Cwd,
+    UserStart,
+    CryptoKeyUser,
+    CredRefr,
+    SystemShutdown,
+    CredAcq,
+    SystemRunlevel,
+    ServiceStop,
+    AnomAbend,
+    UserCmd,
     Path,
+    DaemonStart,
     Proctitle,
+    ServiceStart,
+    ConfigChange,
+    Cwd,
+    UserEnd,
+    UserAuth,
+    DaemonEnd,
+    Sockaddr,
+    SystemBoot,
+    Login,
+    UserAcct,
+    CredDisp,
     // ... there are loads more.
 }
 
@@ -43,3 +71,17 @@ impl Record {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_string_to_enum() {
+        assert_eq!(RecordType::from_str("SYSCALL").unwrap(), RecordType::Syscall);
+        assert_eq!(RecordType::from_str("NETFILTER_CFG").unwrap(), RecordType::NetfilterCfg);
+        assert_eq!(RecordType::from_str("CRED_DISP").unwrap(), RecordType::CredDisp);
+        assert_eq!(RecordType::from_str("CRYPTO_KEY_USER").unwrap(), RecordType::CryptoKeyUser);
+    }
+}
