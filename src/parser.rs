@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+
 struct RecordFields {
         fields: HashMap<String, String>,
 }
@@ -37,9 +38,9 @@ pub enum ParseError {
     FileNotFound, // could not open the specified file
     FailedToReadLine, //  still I/O, don't know how it would fail. malformed data that spreads over one line?
     InvalidLine(String),
-    //EmptyFile         // todo
 }
- 
+
+
 pub fn parse_log_file(filepath: String) -> Result<Vec<Record>, ParseError> {
     let file = File::open(filepath).map_err(|_| ParseError::FileNotFound)?;
     let reader = BufReader::new(file);
@@ -91,7 +92,9 @@ mod tests {
             fields.insert(k.to_string(), v.to_string());
         }
         Record::new(fields)
-    }    
+    }
+
+    // Integration test: parse a sample log file.
     #[test]
     fn test_parse_log_file() {
         let test_log = "type=SYSCALL msg=audit(1364481363.243:24287): arch=c000003e syscall=2 success=no exit=-13 a0=7fffd19c5592 a1=0 a2=7fffd19c4b50 a3=a items=1 ppid=2686 pid=3538 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=1 comm=\"cat\" exe=\"/bin/cat\" subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=\"sshd_config\"\n\
@@ -182,11 +185,33 @@ mod tests {
     }
 
 
+    // Empty lines should(?) be treated as invalid.
     #[test]
     fn test_empty_line() {
         let empty_line = "";
         let result = read_to_fields(empty_line);
         assert!(matches!(result, Err(ParseError::InvalidLine(_))));
+    }
 
+    // Empty files, however, should return an empty vec of Records. It's certainly not an error to have no records.
+    #[test]
+    fn test_empty_log() {
+        let temp_file_path = "empty_audit.log";
+        std::fs::write(temp_file_path, "").unwrap();
+        
+        let result = parse_log_file(temp_file_path.to_string());
+        std::fs::remove_file(temp_file_path).unwrap();
+
+        assert!(result.is_ok());
+        let records = result.unwrap();
+        assert!(records.is_empty());
+        
+    }
+
+    #[test]
+    // This one fails currently... get a linereaderror. Due to GroupSeparator characters in the file... unsure why they're there but it should be an easy fix.
+    fn test_large_file() {
+        let records = parse_log_file("example_logs/redhat.log".into());
+        assert!(records.is_ok());
     }
 }
