@@ -40,15 +40,23 @@ pub enum ParseError {
     InvalidLine(String),
 }
 
-
+///
+/// Fields like SADDR={ saddr_fam=netlink nlnk-fam=16 nlnk-pid=0 } need whitespace removed to parse grouped values together.
+/// Depending on how common this pattern is in these logs, we might want to make the parser robust enough to handle nested
+/// key-value pairs. 
+/// 
 pub fn parse_log_file(filepath: String) -> Result<Vec<Record>, ParseError> {
     let file = File::open(filepath).map_err(|_| ParseError::FileNotFound)?;
     let reader = BufReader::new(file);
-    
+
     reader
         .lines()
         .map(|line_res| line_res.map_err(|_| ParseError::FailedToReadLine)) // handle line read errors
-        .map(|line| read_to_fields(&line?)) // convert each line into a RecordFields
+        .map(|line| read_to_fields(&line? // convert each line into a RecordFieldss
+            .replace("\u{1d}", " ") // accounts for Group Separator (GS) characters
+            .replace("{ ", "{") 
+            .replace(" }", "}"))
+        )
         .map(|fields| parse_to_record(fields?)) // convert each RecordFields into a Record
         .collect() // collect is able to convert an iterator of Results into a Result of a collection via the FromIterator trait
 }
