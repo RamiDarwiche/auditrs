@@ -2,7 +2,7 @@
 - **Audit Record**: A structured representation of an audit event, containing fields such as timestamp, event type, user ID, etc.
 - **Audit Event**: A single occurrence of an action or operation that is logged by the audit system.
   - **Simple Event** - An event that is fully contained within a single audit record.
-  - **Complex Event** - An event that spans multiple audit records. Correlated via PID and timestamp.
+  - **Compound Event** - An event that spans multiple audit records. Correlated via serial and timestamp.
 - **Audit Rules**: Configurations applied to the kernel to specify what events are emitted.
   - These are loaded from a rules file at startup. Since it talks to the kernel, we should keep the legacy format.
   - The legacy format is quite opaque, so writing our own wrapper around it is a stretch goal.
