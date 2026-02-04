@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn test_invalid_line() {
         let invalid_line = "type=SYSCALL msg=audit(1364481363.243:24287) arch=c000003e syscall"; // missing '=' in last part
-        let result = read_to_fields(invalid_line);
+        let result = parse_audit_record(invalid_line);
         assert!(matches!(result, Err(ParseError::InvalidLine(_))));
     }
 
@@ -59,7 +59,7 @@ mod tests {
     fn test_empty_line() {
         // Empty lines should(?) be treated as invalid.
         let empty_line = "";
-        let result = read_to_fields(empty_line);
+        let result = parse_audit_record(empty_line);
         assert!(matches!(result, Err(ParseError::InvalidLine(_))));
     }
 }

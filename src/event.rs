@@ -17,6 +17,7 @@ impl AuditEvent {
     }
     
     pub fn new_compound(records: Vec<AuditRecord>) -> Result<Self, ValidationError> {
+        // Unsure if this validation should be done here... might be the correlators job?
         if records.is_empty() {
             return Err(ValidationError::EmptyRecords);
         }

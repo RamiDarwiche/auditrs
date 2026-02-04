@@ -1,3 +1,6 @@
+use crate::record::AuditRecord;
+use crate::event::AuditEvent;
+
 struct Correlator { }
 
 impl Correlator {
