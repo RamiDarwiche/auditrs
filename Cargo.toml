@@ -1,7 +1,8 @@
 [package]
-name = "audit-rustacean"
+name = "auditrs"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/downloadjpg/auditrs"
 
 [dependencies]
 libc = "0.2.178"
