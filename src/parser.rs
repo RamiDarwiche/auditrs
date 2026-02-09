@@ -1,65 +1,13 @@
-// Audit record parsing
+// Audit record parsing. Converts raw socket data into a parsed AuditRecord
 
-use std::time::SystemTime;
 use crate::record::*;
 
+type RawAudit = Vec<u8>; // Type to be decided when we figure out what the socket gives us.
 
-
-#[derive(Debug)]
-pub enum ParseError {
-    InvalidLine(String),
-    Unknown,
-}
-pub struct RecordPreamble {
-    pub record_type: RecordType,
-    pub timestamp: SystemTime,
-    pub serial: u64, 
-}
-
-/// Fields like SADDR={ saddr_fam=netlink nlnk-fam=16 nlnk-pid=0 } need whitespace removed to parse grouped values together.
-/// Depending on how common this pattern is in these logs, we might want to make the parser robust enough to handle nested
-/// key-value pairs.
-
-
-fn parse_audit_record(line: &str) -> Result<AuditRecord, ParseError>{
-    // Parse the common fields (type, timestamp, serial number)
-    let (preamble, remainder) = parse_preamble(line)?;
-    let data = parse_fields(remainder)?;
-
-    Ok( AuditRecord {
-        record_type: preamble.record_type,
-        timestamp: preamble.timestamp,
-        serial: preamble.serial,
-        data
-    })
-}
-
-fn parse_preamble(line: &str) -> Result<(RecordPreamble, &str), ParseError> {
+fn parse_audit_record(data: RawAudit) -> Result<AuditRecord, ParseError> {
     todo!()
 }
 
-fn parse_fields(line: &str) -> Result<RecordData, ParseError> {
-    todo!()
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_invalid_line() {
-        let invalid_line = "type=SYSCALL msg=audit(1364481363.243:24287) arch=c000003e syscall"; // missing '=' in last part
-        let result = parse_audit_record(invalid_line);
-        assert!(matches!(result, Err(ParseError::InvalidLine(_))));
-    }
-
-
-    #[test]
-    fn test_empty_line() {
-        // Empty lines should(?) be treated as invalid.
-        let empty_line = "";
-        let result = parse_audit_record(empty_line);
-        assert!(matches!(result, Err(ParseError::InvalidLine(_))));
-    }
+enum ParseError {
+    // Add in what can go wrong.
 }

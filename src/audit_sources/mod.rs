@@ -4,4 +4,4 @@ mod mock;
 
 pub use traits::AuditSource;
 pub use netlink::NetlinkSocketReader;
-pub use mock::LogReplayer;
+pub use mock::MockSocketReader;
