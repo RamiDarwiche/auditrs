@@ -6,6 +6,7 @@ repository = "https://github.com/downloadjpg/auditrs"
 
 [dependencies]
 libc = "0.2.178"
+netlink-packet-audit = "0.6.1"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 tokio = { version = "1.49.0", features = ["full"] }
