@@ -1,18 +1,18 @@
-// use crate::event::AuditEvent;
+use crate::event::AuditEvent;
 
 pub struct AuditLogWriter {
     output_format: OutputFormat,
     destination: String,
 }
 
-// enum WriteError {
-//     Unknown,
-// }
+enum WriteError {
+    Unknown,
+}
 
-// enum OutputFormat {
-//     Legacy,
-//     JSON,
-// }
+enum OutputFormat {
+    Legacy,
+    JSON,
+}
 
 impl AuditLogWriter {
 
@@ -28,12 +28,12 @@ impl AuditLogWriter {
         }
     }
 
-//     pub fn write_event_legacy(self, event: AuditEvent) -> Result<(), WriteError> {
-//         todo!()
-//     }
+    pub fn write_event_legacy(self, event: AuditEvent) -> Result<(), WriteError> {
+        todo!()
+    }
 
-//     pub fn write_event_json(self, event: AuditEvent) -> Result<(), WriteError> {
-//         todo!()
-//     }
+    pub fn write_event_json(self, event: AuditEvent) -> Result<(), WriteError> {
+        todo!()
+    }
 
-// }
+}

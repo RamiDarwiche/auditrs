@@ -14,6 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let filename = format!("audit_capture_{}.bin", timestamp);
     let log_filename = format!("log_file_{}.log", timestamp);
+    let filename_deserialized = format!("audit_deserialized_{}.log", timestamp);
 
 
     println!("Capturing audit messages to: {}", filename);
@@ -32,6 +33,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .read(true)
         .truncate(true)
         .open(&log_filename)?;
+
+    let mut filename_deserialized = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .truncate(true)
+        .open(&filename_deserialized)?;
+
 
     let (connection, mut handle, mut messages) =
         audit::new_connection().map_err(|e| format!("Connection failed: {}", e))?;
@@ -110,6 +119,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 log_file.write_all((record.to_log() + "\n").as_str().as_bytes())?;
                 log_file.flush();
 
+                 writeln!(filename_deserialized, "==============================")?;
+
+                writeln!(filename_deserialized, "Message {}", i + 1)?;
+
+                writeln!(
+                    filename_deserialized,
+                    "Header Type: {:?}",
+                    reconstructed_msg.header.message_type
+                )?;
+
+                writeln!(
+                    filename_deserialized,
+                    "Header Length: {}",
+                    reconstructed_msg.header.length
+                )?;
+
+                writeln!(
+                    filename_deserialized,
+                    "Flags: {:?}",
+                    reconstructed_msg.header.flags
+                )?;
+
+                writeln!(
+                    filename_deserialized,
+                    "Sequence Number: {}",
+                    reconstructed_msg.header.sequence_number
+                )?;
+
+                writeln!(
+                    filename_deserialized,
+                    "Payload: {:?}",
+                    reconstructed_msg.payload
+                )?;
+
+                writeln!(filename_deserialized)?;
+
+                filename_deserialized.flush()?;
                 println!("Record object: {:?}", record);
             }
             Err(e) => {
