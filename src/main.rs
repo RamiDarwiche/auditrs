@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn spawn_transport_task(
+fn spawn_transport_task(
     transport: Arc<Mutex<NetlinkAuditTransport>>, 
     sender: mpsc::Sender<RawAuditMessage>
 ) -> tokio::task::JoinHandle<()> {
@@ -80,7 +80,7 @@ async fn spawn_transport_task(
     })
 }
 
-async fn spawn_parser_task(
+fn spawn_parser_task(
     parser: Arc<Mutex<AuditMessageParser>>,
     mut receiver: mpsc::Receiver<RawAuditMessage>,
     sender: mpsc::Sender<ParsedAuditMessage>
@@ -93,7 +93,7 @@ async fn spawn_parser_task(
     })
 }
 
-async fn spawn_correlator_task(
+fn spawn_correlator_task(
     correlator: Arc<Mutex<AuditRecordCorrelator>>,
     mut receiver: mpsc::Receiver<ParsedAuditMessage>,
     sender: mpsc::Sender<CorrelatedEvent>
@@ -106,7 +106,7 @@ async fn spawn_correlator_task(
     })
 }
 
-async fn spawn_writer_task(
+fn spawn_writer_task(
     writer: Arc<Mutex<AuditLogWriter>>,
     mut receiver: mpsc::Receiver<CorrelatedEvent>
 ) -> tokio::task::JoinHandle<()> {
