@@ -28,13 +28,22 @@ impl RawAuditEvent {
     pub fn to_log(&self) -> String {
         let field_data = self.data.clone();
         let mut output = String::new();
-        if(!self.data.is_empty()) {
-            output = format!("type_id={} type={} msg={}", u16::from(self.record_type), self.record_type.as_audit_str(), self.data);
+        if (!self.data.is_empty()) {
+            output = format!(
+                "type_id={} type={} msg={}",
+                u16::from(self.record_type),
+                self.record_type.as_audit_str(),
+                self.data
+            );
         } else {
-        output = format!("type_id={} type={}", u16::from(self.record_type), self.record_type.as_audit_str());
+            output = format!(
+                "type_id={} type={}",
+                u16::from(self.record_type),
+                self.record_type.as_audit_str()
+            );
+        }
+        output
     }
-    output
-}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -11,9 +11,6 @@ pub struct CorrelatedRecord {
 
 impl AuditRecord {
     pub fn new(record_type: RecordType, data: String) -> Self {
-        AuditRecord {
-            record_type,
-            data,
-        }
+        AuditRecord { record_type, data }
     }
 }
