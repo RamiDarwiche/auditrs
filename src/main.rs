@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use auditrs::correlator::AuditRecordCorrelator;
 use auditrs::parser::AuditMessageParser;
 use auditrs::raw_record::RawAuditRecord;
@@ -8,6 +9,7 @@ use std::time::Duration; // todo - when to use std::sync vs tokio::sync ?? tokio
 use tokio::signal;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::sleep;
+
 
 use auditrs::{
     audit_transport::*, correlator::*, event::*, parsed_record::*, parser::*, raw_record::*,
