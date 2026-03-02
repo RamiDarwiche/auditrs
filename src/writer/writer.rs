@@ -32,8 +32,20 @@ impl AuditLogWriter {
         }
     }
 
-    fn write_event_legacy(&mut self, _event: AuditEvent) -> Result<(), WriteError> {
-        todo!()
+    fn write_event_legacy(&mut self, event: AuditEvent) -> Result<(), WriteError> {
+        let prefix;
+        let fields;
+        for record in event.records {
+            prefix = format!("type={:?} msg=audit({:?}.{:?}:", record.record_type, event.timestamp, event.serial);
+            for field in record.fields {
+                fields.push_str(format!(" {:?}={:?}", field.0, field.1));
+            }
+        }
+        let line = format!("{}{}", prefix, fields);
+
+        writeln!(self.file_handle, "{}", line).map_err(|_| WriteError::Unknown)?;
+        self.file_handle.flush().map_err(|_| WriteError::Unknown)?;
+        Ok(())
     }
 
     fn write_event_simple(&mut self, event: AuditEvent) -> Result<(), WriteError> {
