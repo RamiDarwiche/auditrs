@@ -5,3 +5,5 @@ pub mod enricher;
 pub mod parser;
 pub mod utils;
 pub mod writer;
+pub mod daemon;
+pub mod cli;
