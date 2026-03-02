@@ -1,0 +1,122 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Debug unit tests in library 'auditrs'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'auditrs'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=auditrs",
+                ]
+            },
+            "args": ["start"]
+        },
+        {
+            "name": "Debug unit tests in executable 'auditrs'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=auditrs"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'aulast'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=aulast"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'aulast'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=aulast"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'ausearch'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=ausearch"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'ausearch'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=ausearch"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'capture'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=capture"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'capture'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=capture"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'test_source_log'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=test_source_log"
+                ]
+            }
+        }
+    ]
+}

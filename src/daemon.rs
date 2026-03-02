@@ -27,16 +27,30 @@ fn pid_file_path() -> PathBuf {
 
 /// Daemonize the process using the daemonize crate. Call before starting the worker.
 /// Returns Ok(()) in the daemon process; parent exits inside start().
-pub fn start_daemon() -> Result<()> {
+/// Daemonize the process using the daemonize crate. Call before starting the worker.
+/// Returns Ok(()) in the daemon process; parent exits inside start().
+pub fn start_daemon() -> Result<(), anyhow::Error> {
     let path = pid_file_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    daemonize::Daemonize::new()
-        .pid_file(path)
-        .start()?;
-    
-    Ok(())
+
+    println!("Daemonizing with PID file at {}", path.display());
+
+    let daemonize =  daemonize::Daemonize::new()
+        .pid_file(path);
+
+    println!("Starting daemonization");
+
+    match daemonize.start() {
+        Ok(_) => {
+            println!("Successfully daemonized");
+            Ok(())
+        },
+        Err(e) => {
+            println!("Failed to daemonize: {}", e);
+            Err(anyhow::anyhow!("Failed to daemonize: {}", e))},
+    }
 }
 
 /// Remove the PID file. Call on daemon shutdown.

@@ -1,5 +1,6 @@
 #![allow(warnings)]
 use clap::Parser;
+use nom::Err;
 use std::sync::Arc;
 use anyhow::Result;
 use std::time::Duration; // todo - when to use std::sync vs tokio::sync ?? tokio docs say something about access across threads
@@ -28,6 +29,7 @@ fn main() -> Result<()> {
         Commands::Start => {
             println!("Starting auditRS");
             daemon::start_daemon()?;
+            println!("auditRS daemon started");
             // Runtime must be created after fork?? maybe?
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(run_worker())
@@ -36,9 +38,7 @@ fn main() -> Result<()> {
         Commands::Dump => dump_auditrs(),
         Commands::Status => status_auditrs(),
         Commands::Config => config_auditrs(),
-    };
-
-    result?;
+    }?;
 
     Ok(())
 }
