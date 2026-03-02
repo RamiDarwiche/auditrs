@@ -11,6 +11,7 @@ use auditrs::{
     correlator::{AuditEvent, Correlator},
     netlink::{NetlinkAuditTransport, RawAuditRecord},
     parser::ParsedAuditRecord,
+    writer::AuditLogWriter,
     daemon
 };
 
@@ -50,13 +51,16 @@ async fn run_worker() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize components.
     let transport = NetlinkAuditTransport::new();
     let raw_audit_rx = transport.into_receiver();
-    let correlator = Arc::new(Mutex::new(Correlator::new()));
+    let correlator = Correlator::new();
+    let writer = AuditLogWriter::new();
 
     let (parsed_audit_tx, parsed_audit_rx) = mpsc::channel(1000);
     let (correlated_event_tx, correlated_event_rx) = mpsc::channel(1000);
 
     let parser_task = spawn_parser_task(raw_audit_rx, parsed_audit_tx);
     let correlator_task = spawn_correlator_task(correlator, parsed_audit_rx, correlated_event_tx);
+    let writer_task = spawn_writer_task(writer, correlated_event_rx);
+
     let temp_output_task = tokio::spawn(async move {
         let mut rx = correlated_event_rx;
         while rx.recv().await.is_some() {}
@@ -74,7 +78,9 @@ async fn run_worker() -> Result<(), Box<dyn std::error::Error>> {
     parser_task.abort();
     correlator_task.abort();
     temp_output_task.abort();
-    let _ = tokio::join!(parser_task, correlator_task, temp_output_task);
+    writer_task.abort();
+
+    let _ = tokio::join!(parser_task, correlator_task, temp_output_task, writer_task);
 
     daemon::remove_pid_file();
 
@@ -118,7 +124,7 @@ fn spawn_parser_task(
 }
 
 fn spawn_correlator_task(
-    correlator: Arc<Mutex<Correlator>>,
+    mut correlator: Correlator,
     mut receiver: mpsc::Receiver<ParsedAuditRecord>,
     sender: mpsc::Sender<AuditEvent>,
 ) -> tokio::task::JoinHandle<()> {
@@ -128,11 +134,10 @@ fn spawn_correlator_task(
             /// The second branch is executed periodically, every 500ms.
             tokio::select! {
                 Some(record) = receiver.recv() => {
-                    correlator.lock().await.push(record);
+                    correlator.push(record);
                 }
                 _ = sleep(Duration::from_millis(500)) => {
-                    let mut corr = correlator.lock().await;
-                    for event in corr.flush_expired() {
+                    for event in correlator.flush_expired() {
                         println!("Correlated event: {:?}", event);
                         sender.send(event).await.unwrap();
                     }
@@ -143,17 +148,14 @@ fn spawn_correlator_task(
 }
 
 fn spawn_writer_task(
-    _writer: Arc<Mutex<auditrs::writer::AuditLogWriter>>,
-    mut _receiver: mpsc::Receiver<AuditEvent>,
+    mut writer: AuditLogWriter,
+    mut receiver: mpsc::Receiver<AuditEvent>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        loop {
-            println!("writng the disk :p");
-            sleep(Duration::from_millis(100)).await;
-            /* e.g.,
-            let event = receiver.recv().await
-            write_event_to_disk(event);
-            */
+        while let Some(event) = receiver.recv().await {
+            if let Err(e) = writer.write_event(event) {
+                eprintln!("Failed to write audit event: {:?}", e);
+            }
         }
     })
 }

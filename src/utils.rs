@@ -1,4 +1,5 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use chrono::{DateTime, Utc};
 
 pub fn timestamp_string_to_systemtime(
     secs_micros_str: &str,
@@ -12,4 +13,9 @@ pub fn timestamp_string_to_systemtime(
     let millis: u64 = micros_str.get(0..3).unwrap_or(micros_str).parse()?;
 
     Ok(UNIX_EPOCH + Duration::from_secs(seconds) + Duration::from_millis(millis))
+}
+
+pub fn systemtime_to_utc_string(systemtime: SystemTime) -> String {
+    let dt: DateTime<Utc> = systemtime.into();
+    dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
