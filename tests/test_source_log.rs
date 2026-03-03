@@ -1,6 +1,6 @@
 //! Basic tests that ensure test-source.log (a sample of binary audit data captured from the kernel) is valid.
 
-use netlink_packet_audit::AuditMessage;
+use audit::packet::AuditMessage;
 use netlink_packet_core::NetlinkMessage;
 use std::io::BufRead;
 use std::path::Path;

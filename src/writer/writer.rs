@@ -36,15 +36,15 @@ impl AuditLogWriter {
     }
 
     fn write_event_legacy(&mut self, event: AuditEvent) -> Result<()> {
-        let prefix;
-        let fields;
+        let mut prefix: String = String::new();
+        let mut fields: String = String::new();
         for record in event.records {
-            prefix = format!("type={} msg=audit({}:{}",
+            prefix.push_str(&format!("type={} msg=audit({}:{}",
                              record.record_type.as_audit_str(),
                              systemtime_to_timestamp_string(event.timestamp)?,
-                             event.serial);
+                             event.serial));
             for field in record.fields {
-                fields.push_str(format!(" {}={}", field.0, field.1));
+                fields.push_str(&format!(" {}={}", field.0, field.1));
             }
         }
         let line = format!("{}{}", prefix, fields);
