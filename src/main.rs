@@ -1,12 +1,10 @@
 #![allow(warnings)]
 use clap::Parser;
-use nom::Err;
-use std::sync::Arc;
 use anyhow::Result;
 use std::time::Duration; // todo - when to use std::sync vs tokio::sync ?? tokio docs say something about access across threads
 use tokio::signal;
 use tokio::signal::unix::{SignalKind, signal};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use auditrs::cli::{Cli, Commands};
@@ -25,7 +23,7 @@ fn main() -> Result<()> {
     }
 
     let cli = Cli::parse();
-    let result = match cli.command {
+    match cli.command {
         Commands::Start => {
             println!("Starting auditRS");
             daemon::start_daemon()?;
@@ -44,7 +42,7 @@ fn main() -> Result<()> {
 }
 
 async fn run_worker() -> Result<()> {
-    let writer = AuditLogWriter::new();
+    let writer = AuditLogWriter::new()?; // can fail to open log file.
     let transport = NetlinkAuditTransport::new();
     let raw_audit_rx = transport.into_receiver();
     let correlator = Correlator::new();
@@ -109,9 +107,17 @@ fn spawn_parser_task(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(raw_record) = receiver.recv().await {
-            let parsed_record = ParsedAuditRecord::try_from(raw_record).unwrap();
-            println!("Parsed record: {:?}", parsed_record);
-            sender.send(parsed_record).await.unwrap();
+            match ParsedAuditRecord::try_from(raw_record) {
+                Ok(parsed_record) => 
+                    {println!("Parsed record: {:?}", parsed_record);
+                    sender.send(parsed_record).await
+                        .unwrap_or_else(|e| eprintln!("Failed to send parsed record: {:?}", e));
+                }
+                Err(e) => {
+                    eprintln!("Failed to parse raw audit record: {:?}", e);
+                    continue;
+                }
+            };
         }
     })
 }
@@ -123,8 +129,8 @@ fn spawn_correlator_task(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            /// Two async branches are run, the first to succeed will be executed.
-            /// The second branch is executed periodically, every 500ms.
+            // Two async branches are run, the first to succeed will be executed.
+            // The second branch is executed periodically, every 500ms.
             tokio::select! {
                 Some(record) = receiver.recv() => {
                     correlator.push(record);
