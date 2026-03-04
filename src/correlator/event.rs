@@ -1,5 +1,4 @@
 use std::fmt;
-
 use super::AuditEvent;
 use crate::utils::systemtime_to_utc_string;
 

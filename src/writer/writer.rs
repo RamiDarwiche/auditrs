@@ -60,15 +60,14 @@ impl AuditLogWriter {
     }
 
     fn write_event_json(&mut self, event: AuditEvent) -> Result<()> {
-        todo!();
-        let timestamp = format!(
-            "\"timestamp\": \"{}\"",
-            systemtime_to_utc_string(event.timestamp)
-        );
-        let serial = format!("\"serial\": \"{}\"", event.serial);
-
-        let res = format!("");
-        writeln!(self.file_handle,);
+        let res = serde_json::to_string(&event)?;
+        writeln!(self.file_handle, "{}", res)?;
+        self.file_handle.flush()?;
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod test {
+
 }
