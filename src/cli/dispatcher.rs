@@ -37,18 +37,17 @@ pub fn dispatch(matches: &ArgMatches) -> Result<()> {
 /// Tools subcommands, to be moved to /tools when written
 
 fn handle_dump(_matches: &ArgMatches) -> Result<()> {
-    println!("Dump, WIP");
-    Ok(())
+    todo!()
 }
 
 fn handle_search(_matches: &ArgMatches) -> Result<()> {
-    println!("Search, WIP");
-    Ok(())
+    todo!()
+
 }
 
 fn handle_report(_matches: &ArgMatches) -> Result<()> {
-    println!("Report, WIP");
-    Ok(())
+    todo!()
+
 }
 
 fn handle_config(matches: &ArgMatches) -> Result<()> {
