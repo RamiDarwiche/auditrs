@@ -3,6 +3,7 @@ use audit::packet::AuditMessage;
 use futures::stream::StreamExt;
 use netlink_packet_core::NetlinkPayload;
 use tokio::sync::mpsc;
+use anyhow::{Context, Result};
 
 impl NetlinkAuditTransport {
     pub fn new() -> Self {
@@ -36,10 +37,10 @@ impl Default for NetlinkAuditTransport {
 
 async fn netlink_listener_task(
     sender: mpsc::Sender<RawAuditRecord>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     // Create netlink socket connection
-    let (connection, mut handle, mut messages) =
-        audit::new_connection().map_err(|e| format!("Connection failed: {}", e))?;
+    let (connection, mut handle, mut messages) = audit::new_connection()
+        .context(("Netlink socket connection failed."))?;
 
     // Spawn connection task
     tokio::spawn(connection);
@@ -48,7 +49,7 @@ async fn netlink_listener_task(
     handle
         .enable_events()
         .await
-        .map_err(|e| format!("Failed to enable events: {}", e))?;
+        .context("Failed to enable events.")?;
 
     println!("Netlink audit transport listening for kernel events");
 

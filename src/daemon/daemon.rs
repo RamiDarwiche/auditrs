@@ -1,5 +1,5 @@
 use super::worker::run_worker;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 /// Functions for daemonizing auditrs and managing the PID file.
 /// In the future, some work should be done to see if we can get this
 /// working with systemctl or similar system services
@@ -20,14 +20,14 @@ fn is_root() -> Result<()> {
         if libc::geteuid() == 0 {
             Ok(())
         } else {
-            Err(anyhow::anyhow!("User is not running with root privileges"))
+            Err(anyhow!("User is not running with root privileges"))
         }
     }
 }
 
 fn prepare_auditrs() -> Result<()> {
     Command::new("auditctl").arg("-e").arg("1").output()?;
-
+    
     Command::new("service").arg("auditd").arg("stop").output()?;
     Ok(())
 }
