@@ -8,6 +8,10 @@ use std::path::PathBuf;
 
 /// Starts the auditrs daemon.
 pub fn start_auditrs(reboot: bool) -> Result<()> {
+    if is_running()? {
+        colorize_println("Daemon is already running", Colors::BrightGreenFg);
+        return Ok(());
+    }
     println!("Starting auditrs...");
     start_daemon()?;
     if !reboot {
