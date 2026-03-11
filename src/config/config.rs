@@ -3,7 +3,7 @@ use crate::config::{
     LogFormat, MINIMUM_JOURNAL_SIZE, MINIMUM_LOG_SIZE, MINIMUM_PRIMARY_SIZE, SetConfigVariables,
 };
 use crate::utils::capitalize_first_letter;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use config::Config;
 use inquire::{Confirm, Select, Text, validator::Validation};
 use std::path::Path;
@@ -41,14 +41,12 @@ impl AuditConfig {
                 CONFIG_FILE.trim_end_matches(".toml"),
                 config::FileFormat::Toml,
             ))
-            .build()
-            .map_err(|e| anyhow!("{}", e))?;
+            .build()?;
 
         // The TOML file has a top-level `[settings]` table; we map that into
         // `AuditConfig`.
         let settings = config
-            .get::<AuditConfig>("settings")
-            .map_err(|e| anyhow!("{}", e))?;
+            .get::<AuditConfig>("settings")?;
         Ok(settings)
     }
 
@@ -66,7 +64,7 @@ impl AuditConfig {
         let settings = root
             .get_mut("settings")
             .and_then(|v| v.as_table_mut())
-            .ok_or_else(|| anyhow!("missing [settings] section"))?;
+            .ok_or(anyhow!("missing [settings] section"))?;
 
         match key {
             SetConfigVariables::LogDirectory { value } => {
@@ -93,10 +91,8 @@ impl AuditConfig {
                             Ok(_) => Ok(Validation::Valid),
                         }
                     })
-                    .prompt()
-                    .map_err(|e| anyhow!("{}", e))?
-                    .parse::<usize>()
-                    .map_err(|e| anyhow!("{}", e))?;
+                    .prompt()?
+                    .parse::<usize>()?;
                 settings.insert("log_size".into(), toml::Value::Integer(log_size as i64));
             }
             SetConfigVariables::JournalSize => {
@@ -114,10 +110,8 @@ impl AuditConfig {
                         )),
                         Ok(_) => Ok(Validation::Valid),
                     })
-                    .prompt()
-                    .map_err(|e| anyhow!("{}", e))?
-                    .parse::<usize>()
-                    .map_err(|e| anyhow!("{}", e))?;
+                    .prompt()?
+                    .parse::<usize>()?;
                 settings.insert(
                     "journal_size".into(),
                     toml::Value::Integer(journal_size as i64),
@@ -138,10 +132,8 @@ impl AuditConfig {
                         )),
                         Ok(_) => Ok(Validation::Valid),
                     })
-                    .prompt()
-                    .map_err(|e| anyhow!("{}", e))?
-                    .parse::<usize>()
-                    .map_err(|e| anyhow!("{}", e))?;
+                    .prompt()?
+                    .parse::<usize>()?;
                 settings.insert(
                     "primary_size".into(),
                     toml::Value::Integer(primary_size as i64),
@@ -155,8 +147,7 @@ impl AuditConfig {
                         current_fmt,
                         Select::<&str>::DEFAULT_HELP_MESSAGE.unwrap()
                     ))
-                    .prompt()
-                    .map_err(|e| anyhow!("{}", e))?
+                    .prompt()?
                     .to_lowercase();
 
                 settings.insert(
@@ -166,12 +157,10 @@ impl AuditConfig {
             }
         }
         let write_result = std::fs::write(CONFIG_FILE, toml::to_string_pretty(&root)?);
-        if write_result.is_err() {
-            return Err(anyhow!("Failed to save config to {}", CONFIG_FILE));
-        } else {
-            println!("Config successfully saved to {}", CONFIG_FILE);
-        }
-        Ok(())
+
+        write_result
+            .with_context(|| format!("Failed to save config to {}", CONFIG_FILE))
+            .inspect( |_| println!("Config successfully saved to {}", CONFIG_FILE)) 
     }
 
     /// Print config values (used by `config get`).
