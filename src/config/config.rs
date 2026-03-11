@@ -3,7 +3,7 @@ use crate::config::{
     LogFormat, MINIMUM_JOURNAL_SIZE, MINIMUM_LOG_SIZE, MINIMUM_PRIMARY_SIZE, SetConfigVariables,
 };
 use crate::utils::capitalize_first_letter;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use config::Config;
 use inquire::{Confirm, Select, Text, validator::Validation};
 use std::path::Path;
@@ -28,12 +28,15 @@ impl AuditConfig {
     pub fn load_config() -> Result<AuditConfig> {
         if !Path::new(CONFIG_FILE).exists() {
             eprintln!("Config file not found at {CONFIG_FILE}, creating default");
-            fs::create_dir_all(CONFIG_DIR)?;
+            fs::create_dir_all(CONFIG_DIR)
+                .context(format!("Could not create folders for: {CONFIG_DIR}"))?;
             let mut config_file = OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open(CONFIG_FILE)?;
-            write!(config_file, "{}", DEFAULT_CONFIG)?;
+                .open(CONFIG_FILE)
+                .context(format!("Could not create config file at {CONFIG_FILE}"))?;
+            write!(config_file, "{}", DEFAULT_CONFIG)
+                .context(format!("Could not write to config file at {CONFIG_FILE}"))?;
         }
 
         let config = Config::builder()
