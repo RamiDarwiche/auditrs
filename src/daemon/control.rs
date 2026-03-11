@@ -18,8 +18,13 @@ pub fn start_auditrs(reboot: bool) -> Result<()> {
 
 /// Stops the auditrs daemon.
 pub fn stop_auditrs(reboot: bool) -> Result<()> {
+    if !is_running()? {
+        colorize_println("Daemon is already stopped", Colors::BrightRedFg);
+        return Ok(());
+    }
     stop_daemon()?;
     if !reboot {
+        // We don't want to print this when we're in the middle of a reboot
         colorize_println("Stopped auditRS daemon", Colors::BrightRedFg);
     }
     Ok(())

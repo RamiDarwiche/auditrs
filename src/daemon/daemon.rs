@@ -11,26 +11,6 @@ use crate::daemon::PID_FILE_NAME;
 
 use daemonize::{Daemonize, Outcome};
 
-/// Checks if the user has is running with root privileges.
-/// Users without permissions will write to relative paths, we want to avoid
-/// this. TODO: Ideally we check if the user has write access to the audit log
-/// directory.
-fn is_root() -> Result<()> {
-    unsafe {
-        if libc::geteuid() == 0 {
-            Ok(())
-        } else {
-            Err(anyhow!("User is not running with root privileges"))
-        }
-    }
-}
-
-fn prepare_auditrs() -> Result<()> {
-    Command::new("auditctl").arg("-e").arg("1").output()?;
-    
-    Command::new("service").arg("auditd").arg("stop").output()?;
-    Ok(())
-}
 
 /// Creates a daemon process that runs in the background.
 /// Both the parent (main) and child (daemon) will return up the call stack with
@@ -90,11 +70,12 @@ pub fn start_daemon() -> Result<(), anyhow::Error> {
 pub fn stop_daemon() -> Result<()> {
     is_root()?;
     let path = pid_file_path();
-    let contents = fs::read_to_string(&path).context("No PID file found. Is AuditRS running?")?;
+    let contents = fs::read_to_string(&path)
+        .context("No PID file found. Is AuditRS running?")?;
     let pid: i32 = contents
         .trim()
         .parse()
-        .with_context(|| format!("invalid PID in {}", path.display()))?;
+        .context(format!("invalid PID in {}", path.display()))?;
     if unsafe { libc::kill(pid, libc::SIGTERM) } != 0 {
         return Err(std::io::Error::last_os_error().into());
     }
@@ -103,15 +84,20 @@ pub fn stop_daemon() -> Result<()> {
 
 /// True if the PID file exists and that process is still running.
 pub fn is_running() -> Result<bool> {
-    let pid = read_pid()?;
-    Ok(unsafe { libc::kill(pid, 0) == 0 })
+    Ok(
+        fs::exists(pid_file_path())?
+        &&
+        unsafe { libc::kill(read_pid()?, 0) == 0 }
+    )
 }
 
 /// Read the PID from the daemon's PID file.
 pub fn read_pid() -> Result<i32> {
     let path = pid_file_path();
-    let contents = fs::read_to_string(&path)?;
-    Ok(contents.trim().parse::<i32>()?)
+    let contents = fs::read_to_string(&path)
+        .context("Could not read PID file")?;
+    contents.trim().parse::<i32>()
+        .context(format!("Could not parse PID file contents: {contents}"))
 }
 
 /// Get the path to the daemon's PID file.
@@ -134,6 +120,31 @@ pub fn pid_file_path() -> PathBuf {
             .join(PID_FILE_NAME);
     }
     PathBuf::from(".").join(PID_FILE_NAME)
+}
+
+/// Checks if the user is running with root privileges.
+/// Users without permissions will write to relative paths, we want to avoid
+/// this. 
+/// TODO: Ideally we check if the user has write access to the log directory
+fn is_root() -> Result<()> {
+    unsafe {
+        if libc::geteuid() == 0 {
+            Ok(())
+        } else {
+            Err(anyhow!("User is not running with root privileges"))
+        }
+    }
+}
+
+/// Ensures that auditd is no longer running.
+/// TODO: This definitely fails if auditctl or auditd aren't installed.
+fn prepare_auditrs() -> Result<()> {
+    Command::new("sh")
+        .arg("-c")
+        .arg("auditctl -e 1 && service auditd stop")
+        .output()
+        .context("Command failed: `auditctl -e 1 && service auditd stop`")?;
+    Ok(())
 }
 
 // This is a file guard that will wrap the daemon's pid file.
