@@ -29,10 +29,8 @@ jobs:
         run: cargo doc --no-deps --lib
       - name: Remove lock file
         run: rm target/doc/.lock
-      - name: Restructure docs
-        run: |
-          cp -r target/doc/auditrs/* target/doc/
-          cp -r target/doc/auditrs/* target/doc/ && rm -rf target/doc/auditrs
+      - name: Add redirect
+        run: printf '%s\n' '<!doctype html><meta http-equiv="refresh" content="0;url=./auditrs/index.html"><script>location.replace("./auditrs/index.html")</script>' > target/doc/index.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -48,3 +46,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
