@@ -29,6 +29,18 @@ jobs:
         run: cargo doc --no-deps
       - name: Remove lock file
         run: rm target/doc/.lock
+      - name: Restructure docs
+        run: |
+          cp -r target/doc/static.files target/doc/auditrs/
+          cp target/doc/crates.js target/doc/auditrs/
+          cp target/doc/src-files.js target/doc/auditrs/
+          cp target/doc/auditrs/index.html target/doc/index.html
+      - name: Remove lock file
+        run: rm target/doc/.lock
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/doc/auditrs
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
