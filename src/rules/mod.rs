@@ -1,4 +1,4 @@
-//! Audit rule definitions for `auditrs`.
+//! Audit rule definitions for controlling log outputs.
 //!
 //! The `rules` module owns the **filter and watch rule set** that determines
 //! which audit records are written, transformed, or ignored:
@@ -14,8 +14,8 @@ pub mod filters;
 pub mod watches;
 
 pub use auditctl::execute_watch_auditctl_command;
-pub use filters::*;
-pub use watches::*;
+pub use filters::Filters;
+pub use watches::Watches;
 
 use serde::Deserialize;
 
