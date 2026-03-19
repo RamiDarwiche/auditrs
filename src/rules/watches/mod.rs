@@ -40,6 +40,8 @@ pub enum WatchAction {
     Write,
     /// Watch for executions on the specified path.
     Execute,
+    /// Watch for attribute changes to the specified path.
+    Attributes,
 }
 
 /// Watches are fine-grained, directory and file-based rules that specify which
