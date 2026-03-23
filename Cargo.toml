@@ -1,6 +1,6 @@
 [package]
 name = "auditrs"
-version = "0.3.0"
+version = "0.5.0-alpha"
 edition = "2024"
 authors = ["Rami Darwiche <rami.darwiche@ufl.edu>", "Callie Foster <brodricfoster@ufl.edu>", "Esse Ciego <esse@ece.ufl.edu>", "Jonathan Xavioer <jxavioer@ufl.edu>", "Mahika Kakkad <mahika.kakkad@ufl.edu>"]
 repository = "https://github.com/Rowdy-Rustiles/auditrs"
@@ -26,5 +26,10 @@ inquire = "0.9.4"
 fuzzy-matcher = "0.3.7"
 tempfile = "3"
 
+colorized = "1.0.0"
+    
 [target.'cfg(unix)'.dependencies]
 daemonize = "0.5.0"
+
+[dev-dependencies]
+serial_test = "3.4.0"

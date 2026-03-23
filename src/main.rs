@@ -1,7 +1,7 @@
 #![allow(warnings)]
 use anyhow::Result;
 
-use auditrs::cli::{cli::build_cli, dispatcher};
+use auditrs::cli::{build_cli, dispatcher};
 
 fn main() -> Result<()> {
     if std::env::consts::OS != "linux" {
@@ -12,9 +12,5 @@ fn main() -> Result<()> {
     let mut cmd = build_cli();
     let matches = cmd.clone().get_matches();
 
-    if let Err(e) = dispatcher::dispatch(&matches) {
-        eprintln!("Error: {e:?}");
-    }
-
-    Ok(())
+    dispatcher::dispatch(&matches)
 }

@@ -1,11 +1,12 @@
-//! Basic tests that ensure test-source.log (a sample of binary audit data captured from the kernel) is valid.
+//! Basic tests that ensure test-source.log (a sample of binary audit data
+//! captured from the kernel) is valid.
 
 use audit::packet::AuditMessage;
 use netlink_packet_core::NetlinkMessage;
 use std::io::BufRead;
 use std::path::Path;
 
-const TEST_SOURCE_LOG: &str = "tests/test-source.log";
+const SOURCE_LOG: &str = "tests/test-source.log";
 
 /*
 
@@ -48,7 +49,8 @@ pub fn message_to_readable(msg: &NetlinkMessage<AuditMessage>) -> String {
 }
 
 /// Deserializes the source log and returns each message in a readable format.
-/// For the test that use these, run `cargo test --test test_source_log -- --nocapture` to see the output.
+/// For the test that use these, run `cargo test --test source_log --
+/// --nocapture` to see the output.
 pub fn source_log_to_readable(path: &Path) -> Result<Vec<String>, String> {
     let messages = deserialize_source_log(path)?;
     Ok(messages
@@ -77,8 +79,8 @@ pub fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
 }
 
 #[test]
-fn test_source_log_file_exists() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn source_log_file_exists() {
+    let path = Path::new(SOURCE_LOG);
     assert!(
         path.exists(),
         "{} should exist (run the capture binary first to generate it)",
@@ -87,8 +89,8 @@ fn test_source_log_file_exists() {
 }
 
 #[test]
-fn test_source_log_has_content() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn source_log_has_content() {
+    let path = Path::new(SOURCE_LOG);
     let file = std::io::BufReader::new(
         std::fs::File::open(&path).expect("test-source.log should be readable"),
     );
@@ -100,8 +102,8 @@ fn test_source_log_has_content() {
 }
 
 #[test]
-fn test_source_log_lines_are_valid_hex() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn source_log_lines_are_valid_hex() {
+    let path = Path::new(SOURCE_LOG);
     let file = std::io::BufReader::new(
         std::fs::File::open(&path).expect("test-source.log should be readable"),
     );
@@ -121,8 +123,8 @@ fn test_source_log_lines_are_valid_hex() {
 }
 
 #[test]
-fn test_source_log_lines_are_interpretable_as_netlink_audit_messages() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn source_log_lines_are_interpretable_as_netlink_audit_messages() {
+    let path = Path::new(SOURCE_LOG);
     let file = std::io::BufReader::new(
         std::fs::File::open(&path).expect("test-source.log should be readable"),
     );
@@ -136,11 +138,13 @@ fn test_source_log_lines_are_interpretable_as_netlink_audit_messages() {
         let bytes = hex_decode(&line).expect("valid hex");
         match NetlinkMessage::<AuditMessage>::deserialize(&bytes) {
             Ok(_msg) => deserialized_count += 1,
-            Err(e) => panic!(
-                "line {} failed to deserialize as NetlinkMessage<AuditMessage>: {}",
-                i + 1,
-                e
-            ),
+            Err(e) => {
+                panic!(
+                    "line {} failed to deserialize as NetlinkMessage<AuditMessage>: {}",
+                    i + 1,
+                    e
+                )
+            }
         }
     }
     assert!(
@@ -150,8 +154,8 @@ fn test_source_log_lines_are_interpretable_as_netlink_audit_messages() {
 }
 
 #[test]
-fn test_print_reconstructed_messages() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn print_reconstructed_messages() {
+    let path = Path::new(SOURCE_LOG);
     let readable = source_log_to_readable(&path).expect("deserialize source log to readable form");
     println!("--- Reconstructed messages from {} ---", path.display());
     for s in &readable {
@@ -165,8 +169,8 @@ fn test_print_reconstructed_messages() {
 }
 
 #[test]
-fn test_deserialize_source_log_helper() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn deserialize_source_log_helper() {
+    let path = Path::new(SOURCE_LOG);
     if !path.exists() {
         return;
     }
@@ -196,8 +200,8 @@ fn test_deserialize_source_log_helper() {
 }
 
 #[test]
-fn test_source_log_to_readable_helper() {
-    let path = Path::new(TEST_SOURCE_LOG);
+fn source_log_to_readable_helper() {
+    let path = Path::new(SOURCE_LOG);
     if !path.exists() {
         return;
     }

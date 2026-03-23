@@ -1,60 +1,142 @@
+//! Top-level configuration module for `auditrs`.
+//!
+//! This module is responsible for **core daemon configuration**, such as
+//! log directories, file sizes, and output formats. It provides:
+//! - Types that model the on-disk configuration (`AuditConfig`, enums for
+//!   readable `get`/`set` operations).
+//! - Constants describing configuration paths and defaults (e.g. `CONFIG_DIR`,
+//!   `CONFIG_FILE`, minimum sizes).
+//! - Functions for reading, validating, and persisting configuration via the
+//!   `auditrs config` CLI commands.
+//!
+//! Rule-specific behavior (filters and watches) lives in the `rules` module;
+//! this `config` module focuses only on structural daemon settings.
+
 pub mod config;
-pub mod filters;
-pub mod input_utils;
-pub mod state;
 
 pub use config::{get_config, load_config, set_config};
-pub use filters::{
-    add_filter_interactive, get_filters, import_filters, load_filters, remove_filter_interactive,
-    update_filter_interactive,
-};
+
 use serde::Deserialize;
 
-pub const CONFIG_FILE: &str = "Config.toml";
-pub const FILTERS_FILE: &str = "Filters.toml";
+/// The minimum log size for the auditrs daemon.
+pub const MINIMUM_LOG_SIZE: usize = 1048576; // 1 MB
+/// The minimum journal size for the auditrs daemon.
+pub const MINIMUM_JOURNAL_SIZE: usize = 16; // 16 logs
+/// The minimum primary size for the auditrs daemon.
+pub const MINIMUM_PRIMARY_SIZE: usize = 8388608; // 8 MB
+/// The configuration directory for the auditrs daemon.
+pub const CONFIG_DIR: &str = "/etc/auditrs";
+/// The configuration file for the auditrs daemon.
+pub const CONFIG_FILE: &str = "/etc/auditrs/config.toml";
+/// The rules file for the auditrs daemon.
+pub const RULES_FILE: &str = "/etc/auditrs/rules.toml";
+/// The file extensions that can be used for importing and dumping filters.
+pub const FILTER_FILE_EXTENSIONS: &[&str] = &["toml", "ars"];
+/// The actions available for filters and watches.
+pub const FILTER_ACTIONS: &[&str] = &[
+    "allow",
+    "block",
+    "sample",
+    "redact",
+    "route_secondary",
+    "tag",
+    "count_only",
+    "alert",
+];
+/// The log formats for the auditrs output logs.
+pub const LOG_FORMATS: &[&str] = &["Legacy", "Simple", "Json"];
+/// The default configuration for the auditrs daemon.
+pub const DEFAULT_CONFIG: &str = r#"[meta]
+version = "0.3.0"
 
-#[derive(Debug)]
-pub struct State {
-    pub(crate) config: AuditConfig,
-    pub(crate) filters: Filters,
-}
+[settings]
+log_format = "legacy"
+active_directory = "/var/log/auditrs/active"
+primary_directory = "/var/log/auditrs/primary"
+journal_directory = "/var/log/auditrs/journal"
+log_size = 4194304
+journal_size = 16
+primary_size = 67108864
+"#;
 
-// Thin audit filters wrapper for printing extensibility
-#[derive(Debug, Deserialize)]
-pub(crate) struct Filters(Vec<AuditFilter>);
-
-#[derive(Debug, Deserialize)]
-pub struct AuditFilter {
-    pub record_type: String,
-    pub action: String,
-}
-
-#[derive(Debug, Deserialize)]
+/// The core configuration of the auditrs daemon, which is used to define the
+/// structural aspects of the daemon, such as log directories and file sizes.
+#[derive(Debug, Clone, Deserialize)]
 pub struct AuditConfig {
-    pub output_directory: String,
+    /// The log directory for the auditrs daemon.
+    pub active_directory: String,
+    /// The log size for the auditrs daemon.
     pub log_size: usize,
-    pub log_format: String,
+    /// The log format for the auditrs daemon.
+    pub log_format: LogFormat,
+    /// The journal directory for the auditrs daemon.
+    pub journal_directory: String,
+    /// The journal size for the auditrs daemon.
+    pub journal_size: usize,
+    /// The primary directory for the auditrs daemon.
+    pub primary_directory: String,
+    /// The primary size for the auditrs daemon.
+    pub primary_size: usize,
 }
 
+/// An enum for the different configuration variables that can be retrieved.
 #[derive(Debug, Deserialize)]
 pub enum GetConfigVariables {
-    OutputDirectory,
+    /// Get the log directory for the auditrs daemon.
+    LogDirectory,
+    /// Get the journal directory for the auditrs daemon.
+    JournalDirectory,
+    /// Get the primary directory for the auditrs daemon.
+    PrimaryDirectory,
+    /// Get the log size for the auditrs daemon.
     LogSize,
+    /// Get the journal size for the auditrs daemon.
+    JournalSize,
+    /// Get the primary size for the auditrs daemon.
+    PrimarySize,
+    /// Get the log format for the auditrs daemon.
     LogFormat,
 }
 
+/// An enum for the different configuration variables that can be set.
 #[derive(Debug, Deserialize)]
 pub enum SetConfigVariables {
-    OutputDirectory { value: String },
-    LogSize { value: usize },
-    LogFormat
+    /// Set the log directory for the auditrs daemon.
+    LogDirectory {
+        /// The new log directory path.
+        value: String,
+    },
+    /// Set the journal directory for the auditrs daemon.
+    JournalDirectory {
+        /// The new journal directory path.
+        value: String,
+    },
+    /// Set the primary directory for the auditrs daemon.
+    PrimaryDirectory {
+        /// The new primary directory path.
+        value: String,
+    },
+    /// Set the log size for the auditrs daemon.
+    LogSize,
+    /// Set the journal size for the auditrs daemon.
+    JournalSize,
+    /// Set the primary size for the auditrs daemon.
+    PrimarySize,
+    /// Set the log format for the auditrs daemon.
+    LogFormat,
 }
 
-// Unused, for reference
-#[derive(Copy, Clone, Debug, Deserialize)]
+/// An enum for the different log formats that can be used by the auditrs
+/// daemon.
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LogFormat {
+    /// The legacy log format, copies auditd's formatting for backwards
+    /// compatibility. Produces a `.log` log file.
     Legacy,
+    /// The simple log format, intended for human readability. Produces a
+    /// `.slog` log file.
     Simple,
+    /// Formats audit events as JSON objects. Produces a `.json` log file.
     Json,
 }

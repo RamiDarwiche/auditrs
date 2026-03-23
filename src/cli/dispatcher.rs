@@ -1,18 +1,49 @@
+//! CLI dispatcher module for routing subcommands to their respective handlers.
+//!
+//! This module contains the top-level `dispatch` function that matches CLI
+//! subcommands and delegates to handler functions.
+
+// TODO: There a couple of different function dispatch patterns (my bad) used
+// within the dispatch/handle functions. We should aim to eventually unify these
+// patterns into a consistent dispatch scheme.
+
 use anyhow::{Context, Result};
 use clap::ArgMatches;
 
-use crate::config::{
-    add_filter_interactive, get_config, get_filters, import_filters, remove_filter_interactive,
-    set_config, update_filter_interactive, GetConfigVariables, LogFormat, SetConfigVariables, State,
+use crate::config::{GetConfigVariables, SetConfigVariables, get_config, set_config};
+use crate::daemon::control::{
+    reboot_auditrs,
+    reload_auditrs,
+    start_auditrs,
+    status_auditrs,
+    stop_auditrs,
 };
-use crate::daemon::daemon::{is_running, start_daemon, stop_daemon};
+use crate::rules::{
+    add_filter_interactive,
+    add_watch_interactive,
+    dump_filters,
+    dump_watches,
+    get_filters,
+    get_watches,
+    import_filters,
+    import_watches,
+    remove_filter_interactive,
+    remove_watch_interactive,
+    update_filter_interactive,
+    update_watch_interactive,
+};
+use crate::state::State;
 
 /// Top-level entry point for handling CLI subcommands
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function to
 pub fn dispatch(matches: &ArgMatches) -> Result<()> {
     let state = State::load_state()?;
     match matches.subcommand() {
-        Some(("start", _)) => start_auditrs()?,
-        Some(("stop", _)) => stop_auditrs()?,
+        Some(("start", _)) => start_auditrs(false)?,
+        Some(("stop", _)) => stop_auditrs(false)?,
         Some(("reboot", _)) => reboot_auditrs()?,
         Some(("status", _)) => status_auditrs()?,
         Some(("dump", sub_m)) => handle_dump(sub_m)?,
@@ -20,6 +51,7 @@ pub fn dispatch(matches: &ArgMatches) -> Result<()> {
         Some(("report", sub_m)) => handle_report(sub_m)?,
         Some(("config", sub_m)) => handle_config(sub_m)?,
         Some(("filter", sub_m)) => handle_filter(sub_m, &state)?,
+        Some(("watch", sub_m)) => handle_watch(sub_m, &state)?,
         None => {
             unreachable!("cli implementation should prevent this");
         }
@@ -29,102 +61,206 @@ pub fn dispatch(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn start_auditrs() -> Result<()> {
-    start_daemon()
-}
-
-fn stop_auditrs() -> Result<()> {
-    stop_daemon()?;
-    println!("Stopped auditRS daemon");
-    Ok(())
-}
-
-fn reboot_auditrs() -> Result<()> {
-    println!("Rebooting auditRS");
-    let _ = stop_auditrs();
-    start_auditrs()
-}
-
-fn status_auditrs() -> Result<()> {
-    println!(
-        "auditRS is {}",
-        if is_running() {
-            "running"
-        } else {
-            "not running"
-        }
-    );
-    Ok(())
-}
-
+/// Dumps the contents of a selected auditrs log to a specified path.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function. Subcommands and
+///   flags of the argument can be used for further options.
 fn handle_dump(_matches: &ArgMatches) -> Result<()> {
-    println!("Dump, WIP");
-    Ok(())
+    todo!()
 }
 
+/// Searches auditrs logs for a supplied term or pattern.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function. Subcommands and
+///   flags of the argument can be used for further options
 fn handle_search(_matches: &ArgMatches) -> Result<()> {
-    println!("Search, WIP");
-    Ok(())
+    todo!()
 }
 
+/// Generates a report on the audit logs with statistical analysis of their
+/// contents
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function. Subcommands and
+///   flags of the argument can be used for further options
 fn handle_report(_matches: &ArgMatches) -> Result<()> {
-    println!("Report, WIP");
-    Ok(())
+    todo!()
 }
 
+/// Dispatch of config handling commands. Config getters are directly addressed
+/// in this function. Config setters are further propagated to the
+/// `handle_config_set()` function.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument for getting/settings.
 fn handle_config(matches: &ArgMatches) -> Result<()> {
     match matches.subcommand() {
         Some(("get", get_m)) => {
             let key = match get_m.subcommand_name() {
-                Some("directory") => Some(GetConfigVariables::OutputDirectory),
-                Some("size") => Some(GetConfigVariables::LogSize),
                 Some("format") => Some(GetConfigVariables::LogFormat),
+                Some("log-directory") => Some(GetConfigVariables::LogDirectory),
+                Some("journal-directory") => Some(GetConfigVariables::JournalDirectory),
+                Some("primary-directory") => Some(GetConfigVariables::PrimaryDirectory),
+                Some("log-size") => Some(GetConfigVariables::LogSize),
+                Some("journal-size") => Some(GetConfigVariables::JournalSize),
+                Some("primary-size") => Some(GetConfigVariables::PrimarySize),
                 _ => None,
             };
-            get_config(key).map_err(|e| anyhow::anyhow!("{}", e))
+            get_config(key)
         }
         Some(("set", set_m)) => handle_config_set(set_m),
         _ => Ok(()),
     }
 }
 
+/// Prepares the proper function call to `set_config()` based on the supplied
+/// CLI arguments.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument for the config option being set.
 fn handle_config_set(matches: &ArgMatches) -> Result<()> {
-    match matches.subcommand() {
-        Some(("directory", m)) => {
+    let result = match matches.subcommand() {
+        Some(("format", _m)) => set_config(SetConfigVariables::LogFormat),
+        Some(("log-directory", m)) => {
             let value = m
                 .get_one::<String>("value")
                 .context("missing value")?
                 .clone();
-            set_config(SetConfigVariables::OutputDirectory { value })
-                .map_err(|e| anyhow::anyhow!("{}", e))
+            set_config(SetConfigVariables::LogDirectory { value })
         }
-        Some(("size", m)) => {
+        Some(("journal-directory", m)) => {
             let value = m
                 .get_one::<String>("value")
                 .context("missing value")?
-                .parse()
-                .context("size must be a number")?;
-            set_config(SetConfigVariables::LogSize { value }).map_err(|e| anyhow::anyhow!("{}", e))
+                .clone();
+            set_config(SetConfigVariables::JournalDirectory { value })
         }
-        Some(("format", m)) => {
-            set_config(SetConfigVariables::LogFormat)
-                .map_err(|e| anyhow::anyhow!("{}", e))
+        Some(("primary-directory", m)) => {
+            let value = m
+                .get_one::<String>("value")
+                .context("missing value")?
+                .clone();
+            set_config(SetConfigVariables::PrimaryDirectory { value })
         }
+        Some(("log-size", _m)) => set_config(SetConfigVariables::LogSize),
+        Some(("journal-size", _m)) => set_config(SetConfigVariables::JournalSize),
+        Some(("primary-size", _m)) => set_config(SetConfigVariables::PrimarySize),
         _ => Ok(()),
     }
+    .context("Could not set config");
+
+    // Reboot the daemon if the config was changed
+    if result.is_ok() {
+        reload_auditrs()?;
+    }
+
+    result
 }
 
+/// Dispatch of filter commands to their respective handler functions.
+/// Dynamically reloads the auditrs daemon if necessary.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function. Subcommands and
+///   flags of the argument can be used for further options
 fn handle_filter(matches: &ArgMatches, state: &State) -> Result<()> {
     match matches.subcommand() {
         Some(("get", _sub_m)) => get_filters(state),
-        Some(("add", _sub_m)) => add_filter_interactive(state),
-        Some(("update", _sub_m)) => update_filter_interactive(state),
-        Some(("remove", _sub_m)) => remove_filter_interactive(state),
+        Some(("add", _sub_m)) => {
+            let result = add_filter_interactive(state);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("update", _sub_m)) => {
+            let result = update_filter_interactive(state);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("remove", _sub_m)) => {
+            let result = remove_filter_interactive(state);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
         Some(("import", sub_m)) => {
             let file = sub_m
                 .get_one::<String>("file")
                 .context("missing file argument")?;
-            import_filters(file)
+            let result = import_filters(file);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("dump", sub_m)) => {
+            let file = sub_m
+                .get_one::<String>("file")
+                .context("missing file argument")?;
+            dump_filters(file, state)
+        }
+        _ => unreachable!("cli implementation should prevent this"),
+    }
+}
+
+/// Dispatch of watches commands to their respective handler functions.
+/// Dynamically reloads the auditrs daemon if necessary.
+///
+/// **Parameters:**
+///
+/// * `matches`: CLI argument to match a handling function. Subcommands and
+///   flags of the argument can be used for further options
+fn handle_watch(matches: &ArgMatches, state: &State) -> Result<()> {
+    match matches.subcommand() {
+        Some(("get", _sub_m)) => get_watches(state),
+        Some(("add", _sub_m)) => {
+            let result = add_watch_interactive();
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("update", _sub_m)) => {
+            let result = update_watch_interactive(state);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("remove", _sub_m)) => {
+            let result = remove_watch_interactive(state);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("import", sub_m)) => {
+            let file = sub_m
+                .get_one::<String>("file")
+                .context("missing file argument")?;
+            let result = import_watches(file);
+            if result.is_ok() {
+                reload_auditrs()?;
+            }
+            result
+        }
+        Some(("dump", sub_m)) => {
+            let file = sub_m
+                .get_one::<String>("file")
+                .context("missing file argument")?;
+            dump_watches(file, state)
         }
         _ => unreachable!("cli implementation should prevent this"),
     }
