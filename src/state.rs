@@ -1,4 +1,4 @@
-//! Shared state aggregation for the `auditrs` daemon and CLI.
+//! Shared state aggregation for the daemon and CLI.
 //!
 //! This module defines the `State` type, which bundles together the current
 //! core configuration and rule set:

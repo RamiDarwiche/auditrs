@@ -1,4 +1,4 @@
-//! Audit rule definitions for `auditrs`.
+//! Audit rule definitions, encompassing filters and watches (`rules.toml`).
 //!
 //! The `rules` module owns the **filter and watch rule set** that determines
 //! which audit records are written, transformed, or ignored:
