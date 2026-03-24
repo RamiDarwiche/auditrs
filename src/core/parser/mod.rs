@@ -1,7 +1,7 @@
 //! Parses raw audit records into their typed equivalents.
 //!
 //! Auditrs relies on the `audit` crate to initially structure the raw records
-//! received from the kernel (see (audit crate documentation)[https://docs.rs/audit/latest/audit/]).
+//! received from the kernel (see (audit crate documentation)<https://docs.rs/audit/latest/audit/>).
 //! The `parser` module then converts these raw records into their typed
 //! equivalents (with some additional identifier fields), using the `RecordType`
 //! enum to represent the type of the record.

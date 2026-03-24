@@ -1,4 +1,4 @@
-//! Top-level configuration module for `auditrs`.
+//! Configuration of the auditrs daemon (`config.toml`)
 //!
 //! This module is responsible for **core daemon configuration**, such as
 //! log directories, file sizes, and output formats. It provides:

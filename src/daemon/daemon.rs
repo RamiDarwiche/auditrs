@@ -217,10 +217,14 @@ mod test {
 
     #[test]
     fn test_pid_path_xdg() {
-        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg"); }
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg");
+        }
         let path = pid_file_path();
         assert!(path.starts_with("/tmp/xdg"));
-        unsafe { std::env::remove_var("XDG_RUNTIME_DIR"); }
+        unsafe {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
     }
 
     #[test]
@@ -231,44 +235,56 @@ mod test {
         }
         let path = pid_file_path();
         assert!(path.starts_with("/tmp/home/.cache/auditrs"));
-        unsafe { std::env::remove_var("HOME"); }
+        unsafe {
+            std::env::remove_var("HOME");
+        }
     }
 
     #[test]
     fn test_no_pid_file() {
-        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg"); }
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg");
+        }
         // NOTE: Not calling pid_file_path()
-        assert!(!is_running());
-        unsafe { std::env::remove_var("XDG_RUNTIME_DIR"); }
+        assert!(!is_running().unwrap());
+        unsafe {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
     }
 
     #[test]
     fn test_corrupted_pid_file() {
         let dir = TempDir::new().unwrap();
-        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg"); }
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", "/tmp/xdg");
+        }
         let pid_path = dir.path().join(crate::daemon::PID_FILE_NAME);
         fs::write(&pid_path, "blahblahblah").unwrap();
-        assert!(!is_running());
-        unsafe { std::env::remove_var("XDG_RUNTIME_DIR"); }
-    }
-
-    fn test_file_guard_deletes_on_drop() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("pid");
-        // NOTE: Using brackets to create a scope block. After leaving scope block, should delete file
-        {
-            let _guard = FileGuard::new(path.clone()).unwrap();
-            assert!(path.exists());
+        assert!(!is_running().unwrap());
+        unsafe {
+            std::env::remove_var("XDG_RUNTIME_DIR");
         }
-        assert!(!path.exists());
     }
 
     #[test]
     fn test_stop_daemon_no_pid_file() {
-        unsafe { std::env::set_var("XDG_RUNTIME_DIR", "/tmp/definitely_does_not_exist_xyz"); }
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", "/tmp/definitely_does_not_exist_xyz");
+        }
         let result = stop_daemon();
+        // `stop_daemon()` requires root privileges and returns an error if the command
+        // is called without them. Reading this over, we may want to get rid of
+        // the whole idea of multiple file paths creation process in `pid_file_path()`
+        // and just enforce root privileges for all operations.
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No PID file found"));
-        unsafe { std::env::remove_var("XDG_RUNTIME_DIR"); }
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("User is not running with root privileges")
+        );
+        unsafe {
+            std::env::remove_var("XDG_RUNTIME_DIR");
+        }
     }
 }
