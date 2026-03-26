@@ -16,6 +16,7 @@ use anyhow::Result;
 use std::fs::{OpenOptions, create_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
+use serde_json;
 
 use crate::config::{AuditConfig, LogFormat};
 use crate::core::{
@@ -23,7 +24,7 @@ use crate::core::{
     writer::{AuditActive, AuditJournal, AuditLogWriter, AuditPrimary},
 };
 use crate::state::{Rules, State};
-use crate::utils::{current_utc_string, systemtime_to_timestamp_string};
+use crate::utils::{current_utc_string, systemtime_to_timestamp_string, systemtime_to_utc_string};
 
 // TODO: this whole module needs to be closely looked over, a lot of IO is
 // happening here and we want to make sure its not wasting resources.
@@ -200,22 +201,43 @@ impl AuditLogWriter {
     /// * `event`: The event to serialize as JSON.
     /// * `write_primary`: When `true`, the JSON representation will also be
     ///   written to the primary log.
-    fn write_event_json(&mut self, _event: AuditEvent, _write_primary: bool) -> Result<()> {
-        todo!();
-        // let timestamp = format!(
-        //     "\"timestamp\": \"{}\"",
-        //     systemtime_to_utc_string(event.timestamp)
-        // );
-        // let serial = format!("\"serial\": \"{}\"", event.serial);
+    fn write_event_json(&mut self, event: AuditEvent, write_primary: bool) -> Result<()> {
+        // Create JSON object representing event
+        let mut event_json = serde_json::json!({
+            "timestamp": systemtime_to_utc_string(event.timestamp), // TODO: Is UTC string the right choice?
+            "serial": event.serial,
+            "record_count": event.record_count,
+            "records": []
+        });
 
-        // let res = format!("");
-        // writeln!(self.active.file_handle, "{}", res)?;
+        // Add each record as entry in records array
+        let records_array = event_json["records"].as_array_mut().unwrap(); // unwrap is ok because we just defined records above
+        for record in &event.records {
+            let mut record_json = serde_json::json!({
+                "record_type": record.record_type.as_audit_str(),
+                "timestamp": systemtime_to_utc_string(event.timestamp),
+                "serial": record.serial, // TODO: take this out, redundant?
+                "fields": record.fields,
+            });
+            
+            // The "cmd" field gets encoded into hex, we should decode for readability.
+            // if let Some(cmd) = record.fields.get("cmd") {
+            //     if let Some(decoded) = decode_hex_command(cmd)
+            //          record_json["decoded_command"] = serde_json::json!(decoded);
+            // }
+            records_array.push(record_json);
+        }
+        // Convert our structured JSON object into a string, write to disk.
+        let event_str = serde_json::to_string(&event_json)?;
 
-        // if write_primary {
-        //     self.write_primary(res)?;
-        // }
+        write!(self.active.file_handle, "{}", event_str)?;
+        self.active.file_handle.flush()?;
 
-        // Ok(())
+        if write_primary {
+            self.write_primary(event_str)?;
+        }
+
+        Ok(())
     }
     /// Appends a single log line to the primary log.
     ///
