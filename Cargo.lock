@@ -125,6 +125,7 @@ dependencies = [
  "netlink-packet-core",
  "nom",
  "serde",
+ "serde_json",
  "serial_test",
  "strum",
  "strum_macros",
