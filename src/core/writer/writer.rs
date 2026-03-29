@@ -13,10 +13,11 @@
 //!   updated at runtime without restarting the daemon.
 
 use anyhow::Result;
+use serde_json;
 use std::fs::{OpenOptions, create_dir_all};
 use std::io::Write;
+use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
-use serde_json;
 
 use crate::config::{AuditConfig, LogFormat};
 use crate::core::{
@@ -64,8 +65,11 @@ impl AuditLogWriter {
         // Open (or create) the active log file
         let active_path =
             active_directory.join(format!("auditrs.{}", config.log_format.get_extension()));
+        // JSON format uses read_at + set_len on the active file; the descriptor must be
+        // readable (append-only is write-only on Unix and read_at returns EBADF).
         let file_handle = OpenOptions::new()
             .create(true)
+            .read(true)
             .append(true)
             .open(&active_path)?;
         let active_size = std::fs::metadata(&active_path)
@@ -202,6 +206,32 @@ impl AuditLogWriter {
     /// * `write_primary`: When `true`, the JSON representation will also be
     ///   written to the primary log.
     fn write_event_json(&mut self, event: AuditEvent, write_primary: bool) -> Result<()> {
+        let len = self.active.file_handle.metadata()?.len();
+
+        // We have a new file, we open a new JSON array
+        if len == 0 {
+            writeln!(self.active.file_handle, "[")?;
+        } else if len > 2 {
+            // Completed writes end with `\n]\n` (closing the JSON array of audit events).
+            // We strip the existing closing bracket to make room for the next
+            // event. The closing bracket is added back at the end of the function.
+            let mut tail3 = [0u8; 3];
+            self.active.file_handle.read_at(&mut tail3, len - 3)?;
+            if tail3 != *b"\n]\n" {
+                return Err(anyhow::anyhow!(
+                    "Unexpected JSON log trailer: expected {:?}, got {:?}",
+                    b"\n]\n",
+                    tail3
+                ));
+            }
+
+            let new_len = len - 3;
+            self.active.file_handle.set_len(new_len)?;
+            // Insert a comma between elements (not after `[` when the array is empty).
+            if new_len > 2 {
+                write!(self.active.file_handle, ",\n")?;
+            }
+        }
         // Create JSON object representing event
         let mut event_json = serde_json::json!({
             "timestamp": systemtime_to_utc_string(event.timestamp), // TODO: Is UTC string the right choice?
@@ -213,13 +243,13 @@ impl AuditLogWriter {
         // Add each record as entry in records array
         let records_array = event_json["records"].as_array_mut().unwrap(); // unwrap is ok because we just defined records above
         for record in &event.records {
-            let mut record_json = serde_json::json!({
+            let record_json = serde_json::json!({
                 "record_type": record.record_type.as_audit_str(),
                 "timestamp": systemtime_to_utc_string(event.timestamp),
                 "serial": record.serial, // TODO: take this out, redundant?
                 "fields": record.fields,
             });
-            
+
             // The "cmd" field gets encoded into hex, we should decode for readability.
             // if let Some(cmd) = record.fields.get("cmd") {
             //     if let Some(decoded) = decode_hex_command(cmd)
@@ -227,10 +257,16 @@ impl AuditLogWriter {
             // }
             records_array.push(record_json);
         }
-        // Convert our structured JSON object into a string, write to disk.
-        let event_str = serde_json::to_string(&event_json)?;
+        // Convert our structured JSON object into a string, write to disk. Tab are
+        // added for more accurate JSON pretty print formatting.
+        let event_str = serde_json::to_string_pretty(&event_json)?
+            .lines()
+            .map(|line| "\t".to_string() + line)
+            .collect::<Vec<String>>()
+            .join("\n");
 
         write!(self.active.file_handle, "{}", event_str)?;
+        writeln!(self.active.file_handle, "\n]")?;
         self.active.file_handle.flush()?;
 
         if write_primary {
@@ -361,6 +397,7 @@ impl AuditLogWriter {
             .join(format!("auditrs.{}", self.log_format.get_extension()));
         let new_active_handle = OpenOptions::new()
             .create(true)
+            .read(true)
             .append(true)
             .open(&new_active_path)?;
 
@@ -692,6 +729,161 @@ mod tests {
             contents,
             "[1970-01-01T00:00:00.000Z][Record Count: 1] Audit Event Group 1:\n\tRecord: ParsedAuditRecord { record_type: AddGroup, timestamp: SystemTime { tv_sec: 0, tv_nsec: 0 }, serial: 1, fields: {\"key\": \"value\"} }\n\n[1970-01-01T00:00:00.000Z][Record Count: 2] Audit Event Group 1:\n\tRecord: ParsedAuditRecord { record_type: AddGroup, timestamp: SystemTime { tv_sec: 0, tv_nsec: 0 }, serial: 1, fields: {\"key\": \"value\"} }\n\tRecord: ParsedAuditRecord { record_type: DelGroup, timestamp: SystemTime { tv_sec: 0, tv_nsec: 0 }, serial: 1, fields: {\"key_2\": \"value_2\"} }\n\n"
         );
+        cleanup();
+    }
+
+    #[test]
+    #[serial(writer)]
+    fn write_event_json_single_event() {
+        let mut state = get_state();
+        state.config.log_format = LogFormat::Json;
+        // Large log size to avoid rotation
+        state.config.log_size = 1_000_000;
+        let mut writer = AuditLogWriter::new(Some(state)).unwrap();
+
+        let event = create_event(false);
+        writer.write_event(event).unwrap();
+
+        assert!(Path::new("./tmp/auditrs/active/auditrs.json").exists());
+        let contents =
+            std::fs::read_to_string(Path::new("./tmp/auditrs/active/auditrs.json")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+
+        let obj = &arr[0];
+        assert_eq!(obj["serial"].as_u64().unwrap(), 1);
+        assert_eq!(obj["record_count"].as_u64().unwrap(), 1);
+        assert_eq!(
+            obj["timestamp"].as_str().unwrap(),
+            "1970-01-01T00:00:00.000Z"
+        );
+
+        let records = obj["records"].as_array().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["record_type"].as_str().unwrap(), "ADD_GROUP");
+        assert_eq!(
+            records[0]["timestamp"].as_str().unwrap(),
+            "1970-01-01T00:00:00.000Z"
+        );
+        assert_eq!(records[0]["serial"].as_u64().unwrap(), 1);
+
+        assert_eq!(records[0]["fields"]["key"].as_str().unwrap(), "value");
+        cleanup();
+    }
+
+    #[test]
+    #[serial(writer)]
+    fn write_event_json_multiple_records() {
+        let mut state = get_state();
+        state.config.log_format = LogFormat::Json;
+        state.config.log_size = 1_000_000;
+        let mut writer = AuditLogWriter::new(Some(state)).unwrap();
+
+        let event = create_event(true);
+        writer.write_event(event).unwrap();
+
+        assert!(Path::new("./tmp/auditrs/active/auditrs.json").exists());
+        let contents =
+            std::fs::read_to_string(Path::new("./tmp/auditrs/active/auditrs.json")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+
+        let obj = &arr[0];
+        assert_eq!(obj["serial"].as_u64().unwrap(), 1);
+        assert_eq!(obj["record_count"].as_u64().unwrap(), 2);
+        assert_eq!(
+            obj["timestamp"].as_str().unwrap(),
+            "1970-01-01T00:00:00.000Z"
+        );
+
+        let records = obj["records"].as_array().unwrap();
+        assert_eq!(records.len(), 2);
+
+        assert_eq!(records[0]["record_type"].as_str().unwrap(), "ADD_GROUP");
+        assert_eq!(records[0]["fields"]["key"].as_str().unwrap(), "value");
+
+        assert_eq!(records[1]["record_type"].as_str().unwrap(), "DEL_GROUP");
+        assert_eq!(records[1]["fields"]["key_2"].as_str().unwrap(), "value_2");
+        cleanup();
+    }
+
+    #[test]
+    #[serial(writer)]
+    fn write_event_json_multiple_top_level_events() {
+        let mut state = get_state();
+        state.config.log_format = LogFormat::Json;
+        state.config.log_size = 1_000_000;
+        let mut writer = AuditLogWriter::new(Some(state)).unwrap();
+        let event = create_event(false);
+        for _ in 0..4 {
+            writer.write_event(event.clone()).unwrap();
+        }
+        let contents =
+            std::fs::read_to_string(Path::new("./tmp/auditrs/active/auditrs.json")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(
+            arr.len(),
+            4,
+            "each write_event should append one top-level JSON object"
+        );
+
+        for obj in arr {
+            assert_eq!(obj["serial"].as_u64().unwrap(), 1);
+            assert_eq!(obj["record_count"].as_u64().unwrap(), 1);
+            assert_eq!(
+                obj["timestamp"].as_str().unwrap(),
+                "1970-01-01T00:00:00.000Z"
+            );
+
+            let records = obj["records"].as_array().unwrap();
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0]["record_type"].as_str().unwrap(), "ADD_GROUP");
+            assert_eq!(records[0]["fields"]["key"].as_str().unwrap(), "value");
+        }
+        cleanup();
+    }
+
+    #[test]
+    #[serial(writer)]
+    fn write_event_json_mixed_items() {
+        let mut state = get_state();
+        state.config.log_format = LogFormat::Json;
+        state.config.log_size = 1_000_000;
+        let mut writer = AuditLogWriter::new(Some(state)).unwrap();
+
+        let event = create_event(false);
+        let event_2 = create_event(true);
+
+        writer.write_event(event).unwrap();
+        writer.write_event(event_2).unwrap();
+
+        let contents =
+            std::fs::read_to_string(Path::new("./tmp/auditrs/active/auditrs.json")).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+
+        // First event: single record (ADD_GROUP)
+        let obj0 = &arr[0];
+        assert_eq!(obj0["record_count"].as_u64().unwrap(), 1);
+        let records0 = obj0["records"].as_array().unwrap();
+        assert_eq!(records0.len(), 1);
+        assert_eq!(records0[0]["record_type"].as_str().unwrap(), "ADD_GROUP");
+        assert_eq!(records0[0]["fields"]["key"].as_str().unwrap(), "value");
+
+        // Second event: two records (ADD_GROUP, DEL_GROUP)
+        let obj1 = &arr[1];
+        assert_eq!(obj1["record_count"].as_u64().unwrap(), 2);
+        let records1 = obj1["records"].as_array().unwrap();
+        assert_eq!(records1.len(), 2);
+        assert_eq!(records1[0]["record_type"].as_str().unwrap(), "ADD_GROUP");
+        assert_eq!(records1[0]["fields"]["key"].as_str().unwrap(), "value");
+        assert_eq!(records1[1]["record_type"].as_str().unwrap(), "DEL_GROUP");
+        assert_eq!(records1[1]["fields"]["key_2"].as_str().unwrap(), "value_2");
+
         cleanup();
     }
 
