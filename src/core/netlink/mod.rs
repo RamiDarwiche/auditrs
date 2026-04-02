@@ -15,6 +15,7 @@
 
 mod netlink;
 mod raw_record;
+use audit::packet::AuditMessage;
 
 /// A raw audit record received from the kernel via netlink.
 #[derive(Debug, PartialEq)]
@@ -28,5 +29,8 @@ pub struct RawAuditRecord {
 /// A transport for receiving raw audit records from the kernel via netlink and
 /// forwarding them to an intermediary MPSC channel for parsing.
 pub struct NetlinkAuditTransport {
-    receiver: tokio::sync::mpsc::Receiver<RawAuditRecord>,
+    to_kernel: tokio::sync::mpsc::Sender<AuditMessage>,         // sends messages to kernel
+    from_kernel: tokio::sync::mpsc::Receiver<AuditMessage>,     // receives messages from kernel
+    to_parser: tokio::sync::mpsc::Sender<RawAuditRecord>,       // sends records received from kernel to rest of the program
+
 }
