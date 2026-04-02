@@ -28,28 +28,93 @@ use crate::core::{
 };
 use crate::state::{AuditConfig, Rules, State};
 
-/// Launches the daemon's asynchronous worker tasks and drives signal handling.
-///
-/// The worker performs the following high-level steps:
-///
-/// - Loads initial `State` (configuration and rules) and exposes them on
-///   `watch` channels so that downstream components can react to updates.
-/// - Constructs the core pipeline components: `AuditLogWriter`,
-///   `NetlinkAuditTransport`, and `Correlator`.
-/// - Spawns three cooperative tasks:
-///   - a **parser task** that consumes `RawAuditRecord`s and produces
-///     `ParsedAuditRecord`s,
-///   - a **correlator task** that groups related records into `AuditEvent`s,
-///   - a **writer task** that persists events and reacts to config/rules
-///     changes.
-/// - Waits for termination signals (`SIGTERM`, `SIGHUP`, Ctrl‑C); on `SIGHUP`
-///   it reloads state and publishes new config/rules; on termination signals it
-///   aborts the background tasks and returns.
-///
-/// **Parameters:**
-///
-/// This function does not take any parameters; it is intended to be the
-/// top-level entry point for the daemon's asynchronous runtime.
+/// Core data pipeline for audit processing.
+/// While there isn't necesarily anything higher than this, we expose it for clarity.
+pub struct Pipeline {
+    pub handle_netlink: NetlinkHandle,
+    pub handle_parser: ParserHandle,
+    pub handle_correlator: CorrelatorHandle,
+    pub handle_writer: WriterHandle,
+}
+
+impl Pipeline {
+    /// Launches the daemon's asynchronous worker tasks and drives signal handling.
+    ///
+    /// The worker performs the following high-level steps:
+    ///
+    /// - Loads initial `State` (configuration and rules) and exposes them on
+    ///   `watch` channels so that downstream components can react to updates.
+    /// - Constructs the core pipeline components: `AuditLogWriter`,
+    ///   `NetlinkAuditTransport`, and `Correlator`.
+    /// - Spawns three cooperative tasks:
+    ///   - a **parser task** that consumes `RawAuditRecord`s and produces
+    ///     `ParsedAuditRecord`s,
+    ///   - a **correlator task** that groups related records into `AuditEvent`s,
+    ///   - a **writer task** that persists events and reacts to config/rules
+    ///     changes.
+    /// - Waits for termination signals (`SIGTERM`, `SIGHUP`, Ctrl‑C); on `SIGHUP`
+    ///   it reloads state and publishes new config/rules; on termination signals it
+    ///   aborts the background tasks and returns.
+    ///
+    /// **Parameters:**
+    ///
+    /// This function does not take any parameters; it is intended to be the
+    /// top-level entry point for the daemon's asynchronous runtime.
+    pub async fn launch() -> Result<()> {
+        let state = State::load_state()?;
+
+        // Create each actor and keep their handles.
+        let netlink = NetlinkHandle::new();
+        let parser = ParserHandle::new();
+        let correlator = CorrelatorHandle::new();
+        let writer = WriterHandle::new();
+        let enricher = EnricherHandle::new();
+
+        // Create channels for each actor to communicate through.
+        let (raw_audit_tx, raw_audit_rx) = mpsc::channel(1000);
+        let (parsed_audit_tx, parsed_audit_rx) = mpsc::channel(1000);
+        let (correlated_event_tx, correlated_event_rx) = mpsc::channel(1000);
+        let (enriched_event_tx, enriched_event_rx) = mpsc::channel(1000);
+
+        // Create channels for config/rules change.
+        let (config_tx, config_rx) = watch::channel(state.config);
+        let (rules_tx, rules_rx) = watch::channel(state.rules);
+
+        // Spawn each task, hooking up actors to one another.
+        // Pass in config channels if needed
+        netlink.run(raw_audit_tx);
+        parser.run(raw_audit_rx, parsed_audit_tx);
+        correlator.run(parsed_audit_rx, correlated_event_tx);
+        enricher.run(correlated_event_tx, enriched_event_tx);
+        writer.run(enriched_event_rx, enriched_event_tx);
+
+        // Standby for events such as SIGTERM or Config reload.
+        let mut sigterm = signal(SignalKind::terminate())?;
+        let mut sighup = signal(SignalKind::hangup())?;
+
+        loop {
+            tokio::select! {
+                _ = signal::ctrl_c() => break,
+                _ = sigterm.recv() => break,
+                _ = sighup.recv() => {
+                    match State::load_state() {
+                        Ok(state) => {
+                            let _ = config_tx.send(state.config);
+                            let _ = rules_tx.send(state.rules);
+                        }
+                        Err(e) => {
+                            eprintln!("SIGHUP: failed to reload state: {:?}", e);
+                        }
+                    };
+                }
+            }
+        }
+        // End gracefully
+        // TODO. https://ryhl.io/blog/actors-with-tokio/ implies that shutdown is handled by dropping of the senders... so it should happen automatically? scary.
+        Ok(())
+    }
+}
+
 pub async fn run_worker() -> Result<()> {
     // We watch to see if the config and rules files change; on reload, we
     // send the new values into watch channels to propagate to the necessary
