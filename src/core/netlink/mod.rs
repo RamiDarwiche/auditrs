@@ -28,5 +28,5 @@ pub struct RawAuditRecord {
 /// A transport for receiving raw audit records from the kernel via netlink and
 /// forwarding them to an intermediary MPSC channel for parsing.
 pub struct NetlinkAuditTransport {
-    pub(crate) receiver: tokio::sync::mpsc::Receiver<RawAuditRecord>,
+    receiver: tokio::sync::mpsc::Receiver<RawAuditRecord>,
 }
